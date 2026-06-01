@@ -19,4 +19,13 @@ class Article extends Model
     {
         return $this->belongsTo(User::class);
     }
+    // Tambahkan di dalam class Article di app/Models/Article.php
+
+    // Relasi Many-to-Many ke model Tag
+    public function tags()
+    {
+        return $this->belongsToMany(Tag::class);
+    }
+
+    
 }

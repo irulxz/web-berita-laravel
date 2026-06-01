@@ -60,14 +60,14 @@
 
 </div>
 
-<!-- (OPSIONAL) CHART - boleh tetap ada -->
+<!-- 🔥 CHART -->
 <div class="row">
 
     <!-- Area Chart -->
     <div class="col-xl-8 col-lg-7">
         <div class="card shadow mb-4">
-            <div class="card-header">
-                Grafik Artikel
+            <div class="card-header font-weight-bold text-primary">
+                Grafik Artikel per Bulan
             </div>
             <div class="card-body">
                 <canvas id="myAreaChart"></canvas>
@@ -78,7 +78,7 @@
     <!-- Pie Chart -->
     <div class="col-xl-4 col-lg-5">
         <div class="card shadow mb-4">
-            <div class="card-header">
+            <div class="card-header font-weight-bold text-primary">
                 Statistik Kategori
             </div>
             <div class="card-body">
@@ -88,5 +88,56 @@
     </div>
 
 </div>
+
+@endsection
+
+
+@section('scripts')
+
+<!-- ChartJS -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+// 🔥 AREA CHART (Artikel per bulan)
+const areaCtx = document.getElementById('myAreaChart');
+
+new Chart(areaCtx, {
+    type: 'line',
+    data: {
+        labels: {!! json_encode(array_keys($articlePerMonth->toArray())) !!},
+        datasets: [{
+            label: 'Jumlah Artikel',
+            data: {!! json_encode(array_values($articlePerMonth->toArray())) !!},
+            fill: true,
+            tension: 0.3
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: {
+                display: true
+            }
+        }
+    }
+});
+
+
+// 🔥 PIE CHART (Kategori)
+const pieCtx = document.getElementById('myPieChart');
+
+new Chart(pieCtx, {
+    type: 'pie',
+    data: {
+        labels: {!! json_encode($categoryData->pluck('name')) !!},
+        datasets: [{
+            data: {!! json_encode($categoryData->pluck('articles_count')) !!}
+        }]
+    },
+    options: {
+        responsive: true
+    }
+});
+</script>
 
 @endsection

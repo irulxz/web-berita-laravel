@@ -4,79 +4,108 @@ namespace App\Http\Controllers;
 
 use App\Models\Article;
 use App\Models\Category;
+use App\Models\Tag;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 class ArticleController extends Controller
 {
     public function index()
     {
-        // Eager loading relasi
-        $articles = Article::with(['category', 'user'])->latest()->get();
+        $articles = Article::with(['category', 'user.profile', 'tags'])->latest()->get();
         return view('admin.articles.index', compact('articles'));
     }
 
     public function create()
     {
         $categories = Category::all();
-
-        if ($categories->isEmpty()) {
-            return redirect()->route('categories.create')
-                ->with('info', 'Silakan buat kategori terlebih dahulu sebelum menulis berita.');
-        }
-
-        return view('admin.articles.create', compact('categories'));
+        $tags = Tag::all();
+        return view('admin.articles.create', compact('categories', 'tags'));
     }
 
     public function store(Request $request)
     {
         $request->validate([
-            'title' => 'required|string|min:10|max:255', // 🔥 FIX DI SINI
+            'title' => 'required|string|min:10|max:255',
             'category_id' => 'required|exists:categories,id',
             'content' => 'required|string',
-        ], [
-            'title.required' => 'Judul wajib diisi',
-            'title.min' => 'Judul minimal 10 karakter',
-            'category_id.required' => 'Kategori wajib dipilih',
-            'content.required' => 'Isi berita wajib diisi',
+            'image' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
+            'tags' => 'nullable|array',
+            'tags.*' => 'exists:tags,id',
         ]);
 
-        Article::create([
+        $imagePath = null;
+
+        if ($request->hasFile('image')) {
+            $imagePath = $request->file('image')->store('articles', 'public');
+        }
+
+        $article = Article::create([
             'user_id' => Auth::id(),
             'category_id' => $request->category_id,
             'title' => $request->title,
             'slug' => Str::slug($request->title) . '-' . time(),
             'content' => $request->content,
+            'image' => $imagePath,
         ]);
 
+        // Attach tags
+        $article->tags()->attach($request->tags ?? []);
+
         return redirect()->route('articles.index')
-            ->with('success', 'Berita berhasil ditambahkan!');
+            ->with('success', 'Berita berhasil dipublikasikan!');
+    }
+
+    public function show($slug)
+    {
+        $article = Article::with(['category', 'tags', 'user.profile'])
+            ->where('slug', $slug)
+            ->firstOrFail();
+
+        return view('berita.show', compact('article'));
     }
 
     public function edit(Article $article)
     {
         $categories = Category::all();
-        return view('admin.articles.edit', compact('article', 'categories'));
+        $tags = Tag::all();
+        return view('admin.articles.edit', compact('article', 'categories', 'tags'));
     }
 
     public function update(Request $request, Article $article)
     {
         $request->validate([
-            'title' => 'required|string|min:10|max:255', // 🔥 FIX JUGA DI SINI
+            'title' => 'required|string|min:10|max:255',
             'category_id' => 'required|exists:categories,id',
             'content' => 'required|string',
-        ], [
-            'title.required' => 'Judul wajib diisi',
-            'title.min' => 'Judul minimal 10 karakter',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
+            'tags' => 'nullable|array',
+            'tags.*' => 'exists:tags,id',
         ]);
+
+        $imagePath = $article->image;
+
+        // Jika upload gambar baru
+        if ($request->hasFile('image')) {
+            if ($article->image) {
+                Storage::disk('public')->delete($article->image);
+            }
+
+            $imagePath = $request->file('image')->store('articles', 'public');
+        }
 
         $article->update([
             'category_id' => $request->category_id,
             'title' => $request->title,
             'slug' => Str::slug($request->title) . '-' . $article->id,
             'content' => $request->content,
+            'image' => $imagePath,
         ]);
+
+        // Sync tags (update pivot)
+        $article->tags()->sync($request->tags ?? []);
 
         return redirect()->route('articles.index')
             ->with('success', 'Berita berhasil diperbarui!');
@@ -84,6 +113,11 @@ class ArticleController extends Controller
 
     public function destroy(Article $article)
     {
+        // Hapus gambar dari storage
+        if ($article->image) {
+            Storage::disk('public')->delete($article->image);
+        }
+
         $article->delete();
 
         return redirect()->route('articles.index')
